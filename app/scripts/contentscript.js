@@ -11,7 +11,6 @@ var redmineIssueTimer = (function ($, undefined) {
     var timerId;
     var url = window.location.host + window.location.pathname;
     var issueUrlId = url.replace(/(\/|\.|\W)/g, ''); //redmineruissues223
-    var storageCounter = 0;//dont want to save every second, only every 15 seconds
     var commitButton;
 
 
@@ -23,9 +22,9 @@ var redmineIssueTimer = (function ($, undefined) {
 
         commitButton = $('input[name="commit"]');
 
-        createContainer();
+        createContainer(); //конструктор html'а
 
-        loadValueFromStorage();
+        loadValueFromStorage(); //загрузка стораджа для текущего урла задачи
 
         loadValueFromInput();
 
@@ -33,7 +32,7 @@ var redmineIssueTimer = (function ($, undefined) {
 
         inputOnchangeAutoSave();
 
-        commitButtonHandler();
+        commitButtonHandler(); //события клика сабмита и проверка на прошлое нажатие
 
         input.attr('autocomplete', 'off');
 
@@ -72,9 +71,11 @@ var redmineIssueTimer = (function ($, undefined) {
     };
 
     var loadValueFromStorage = function () {
-    	if (localStorage[issueUrlId]) {
-    		input.val(localStorage[issueUrlId]);
+    	if (localStorage[issueUrlId+'_sec'] || localStorage[issueUrlId+'_stamp']) {
+    		input.val(toHr(getTimer()));
     	}
+        if (localStorage[issueUrlId+'_onPlay'])
+            startTimer();
     };
 
     var loadValueFromInput = function () {
@@ -105,6 +106,11 @@ var redmineIssueTimer = (function ($, undefined) {
         return formattedValue;
     };
 
+    var hoursToSeconds = function (hours) {
+        var h = hours;
+        return Math.floor(h * 3600);
+    };
+
     var leftPadding = function (str, padString, length) {
         while (str.length < length) {
             str = padString + str;
@@ -114,11 +120,43 @@ var redmineIssueTimer = (function ($, undefined) {
 
     var startTimer = function () {
         timerId = setInterval(refreshElapsedTimeValue, 1000);
+        localStorage[issueUrlId+'_sec'] = getTimer();
+        localStorage[issueUrlId+'_stamp'] = getCurTime();
+        localStorage[issueUrlId+'_onPlay'] = true;
     };
 
     var stopTimer = function() {
         clearInterval(timerId);
         timerId = null;
+        localStorage[issueUrlId+'_sec'] = getTimer();
+        localStorage[issueUrlId+'_onPlay'] = '';
+    };
+
+    var getCurTime = function() {
+        var time = new Date().getTime();
+        return Math.floor(time / 1000);
+    };
+
+    var toHr = function(elapsedSeconds) {
+        var numericValue = secondsToHours(elapsedSeconds);
+        return numericValue.toFixed(roundInputValueTo);
+    };
+
+    var getTimer = function() {
+        if (localStorage[issueUrlId+'_onPlay']) {
+            if (localStorage[issueUrlId + '_sec']==0){
+                return getCurTime() - localStorage[issueUrlId + '_stamp'];
+            } else {
+                return getCurTime() - localStorage[issueUrlId + '_stamp'] + parseInt(localStorage[issueUrlId + '_sec']);
+            }
+        } else {
+            if (localStorage[issueUrlId + '_sec']==0){
+                return 0;
+            } else {
+                return localStorage[issueUrlId + '_sec'];
+            }
+        }
+
     };
 
     var refreshElapsedTimeValue = function () {
@@ -135,12 +173,6 @@ var redmineIssueTimer = (function ($, undefined) {
         var numericValue = secondsToHours(elapsedSeconds);
         var newVal = numericValue.toFixed(roundInputValueTo);
         input.val(newVal);
-        //save to storage every 15 second
-        if (storageCounter == 15) {
-            localStorage[issueUrlId] = newVal;
-            storageCounter = 0;
-        }
-        storageCounter++;
     };
 
     var secondsToHours = function (t) {
@@ -149,7 +181,8 @@ var redmineIssueTimer = (function ($, undefined) {
 
     var inputOnchangeAutoSave = function () {
     	input.on('input', function(){
-	    	localStorage[issueUrlId] = input.val().replace(',', '.');
+	    	localStorage[issueUrlId+'_sec'] = hoursToSeconds(input.val().replace(',', '.'));
+            localStorage[issueUrlId+'_stamp'] = getCurTime();
 	    	loadValueFromInput();
 	    	setClockValue();
 	    });
@@ -159,16 +192,16 @@ var redmineIssueTimer = (function ($, undefined) {
         //when commit time value we want to reset time value in input, otherwise
         //we need to manual erase this value
         commitButton.click(function () {
-            localStorage[issueUrlId + 'onSave'] = localStorage[issueUrlId];
+            localStorage[issueUrlId + 'onSave'] = localStorage[issueUrlId+'_sec'];
             //after form submit we must check if value stored in input equal this
             //value we must reset
         });
 
-        if (localStorage[issueUrlId] == localStorage[issueUrlId + 'onSave']) {
+        if (localStorage[issueUrlId+'_sec'] == localStorage[issueUrlId + 'onSave']) {
             input.val('');
             elapsedSeconds = 0;
             setClockValue();
-            localStorage[issueUrlId] = localStorage[issueUrlId + 'onSave'] = 0;
+            localStorage[issueUrlId+'_sec'] = localStorage[issueUrlId + 'onSave'] = 0;
         }
     };
     
